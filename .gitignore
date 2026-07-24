@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- project-specific ----
+# Local environment overrides (machine-specific paths) -- NOT committed.
+# Copy env.bat.example to env.bat and edit your local paths there.
+env.bat
+
+# OS / editor
+.DS_Store
+Thumbs.db
