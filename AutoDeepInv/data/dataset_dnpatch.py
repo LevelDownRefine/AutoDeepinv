@@ -17,11 +17,11 @@ class DatasetDnPatch(BaseDataset):
     def __init__(self, opt):
         super(DatasetDnPatch, self).__init__(opt)
         # DnPatch hyperparameters are REQUIRED from the sweep/config layer -- no
-        # silent defaults. sigma_test is the only tolerated default, and only
-        # because it is *derived* (test noise level == train sigma).
+        # silent defaults, sigma_test included (see DatasetDnCNN for why the
+        # train==test assumption is not a safe fallback).
         self.patch_size = self._demand(opt, 'H_size')
         self.sigma = self._demand(opt, 'sigma')
-        self.sigma_test = opt.get('sigma_test', self.sigma)
+        self.sigma_test = self._demand(opt, 'sigma_test')
         self.num_patches_per_image = self._demand(opt, 'num_patches_per_image')
         self.num_sampled = self._demand(opt, 'num_sampled')
 

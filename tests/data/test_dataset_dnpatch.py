@@ -52,6 +52,11 @@ def test_dnpatch_init_missing_required_raises(make_image_dir):
         DatasetDnPatch({"phase": "test", "n_channels": 3, "H_size": 64,
                         "sigma_test": 25, "num_patches_per_image": 1,
                         "num_sampled": 1, "dataroot_H": str(d)})
+    # sigma_test is required too -- a forgotten key must fail loud.
+    with pytest.raises(AssertionError):
+        DatasetDnPatch({"phase": "test", "n_channels": 3, "H_size": 64,
+                        "sigma": 25, "num_patches_per_image": 1,
+                        "num_sampled": 1, "dataroot_H": str(d)})
 
 
 # ------------------------------------------------------------

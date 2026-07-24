@@ -10,13 +10,13 @@ class DatasetDnCNN(BaseDataset):
     def __init__(self, opt):
         super(DatasetDnCNN, self).__init__(opt)
         # DnCNN hyperparameters are REQUIRED from the sweep/config layer -- no
-        # silent defaults (a forgotten H_size must fail loud, not silently
-        # train on 64x64). The only tolerated default is sigma_test, and only
-        # because it is *derived* (test noise level == train sigma); an explicit
-        # sigma_test still overrides it.
+        # silent defaults. sigma_test is required too: the "test level == train
+        # sigma" coincidence only holds when the sweep actually tests at the
+        # train level; if it tests at a different level and forgets sigma_test,
+        # a silent fallback would be exactly the misconfiguration we forbid.
         self.patch_size = self._demand(opt, 'H_size')
         self.sigma = self._demand(opt, 'sigma')
-        self.sigma_test = opt.get('sigma_test', self.sigma)
+        self.sigma_test = self._demand(opt, 'sigma_test')
 
     def _make_noisy(self, img, sigma, seed=None):
         """Add zero-mean AWGN of std ``sigma/255`` using ``np.random.normal``.

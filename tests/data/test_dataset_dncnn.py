@@ -111,12 +111,14 @@ def test_dncnn_init_required_values():
 
 def test_dncnn_init_missing_required_raises():
     import pytest
-    # H_size and sigma are required -- a forgotten key must fail loud, not
-    # silently fall back to 64 / 25.
+    # H_size, sigma and sigma_test are all required -- a forgotten key must
+    # fail loud, never silently fall back to 64 / 25 / 25.
     with pytest.raises(AssertionError):
-        DatasetDnCNN({"phase": "test", "n_channels": 3, "sigma": 25, "sigma_test": 25})
+        DatasetDnCNN({"phase": "test", "n_channels": 3, "sigma": 25, "sigma_test": 25})  # missing H_size
     with pytest.raises(AssertionError):
-        DatasetDnCNN({"phase": "test", "n_channels": 3, "H_size": 64, "sigma_test": 25})
+        DatasetDnCNN({"phase": "test", "n_channels": 3, "H_size": 64, "sigma_test": 25})  # missing sigma
+    with pytest.raises(AssertionError):
+        DatasetDnCNN({"phase": "test", "n_channels": 3, "H_size": 64, "sigma": 25})  # missing sigma_test
 
 
 def test_dncnn_init_explicit():
