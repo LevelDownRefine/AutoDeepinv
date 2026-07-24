@@ -53,6 +53,16 @@ def test_plainpatch_builds_patch_buffers(tmp_path, write_rgb_png):
     assert ds.L_data.shape == (expected, 64, 64, 3)
 
 
+def test_plainpatch_init_missing_required_raises(tmp_path, write_rgb_png):
+    import pytest
+    roots = _make_roots(tmp_path, write_rgb_png)
+    # num_sampled is required -- a forgotten key must fail loud (no magic 3000).
+    with pytest.raises(AssertionError):
+        DatasetPlainPatch({"n_channels": 3, "H_size": 64,
+                           "num_patches_per_image": 3, "dataroot_H": roots["dataroot_H"],
+                           "dataroot_L": roots["dataroot_L"], "phase": "train"})
+
+
 # ------------------------------------------------------------
 # _make_sample (test mode): identity
 # ------------------------------------------------------------

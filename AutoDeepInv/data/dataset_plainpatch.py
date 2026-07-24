@@ -9,12 +9,13 @@ class DatasetPlainPatch(BaseDataset):
 
     def __init__(self, opt):
         super(DatasetPlainPatch, self).__init__(opt)
-        # Image-to-image mapping with pre-extracted L/H patch buffers. 64x64
-        # default crop; 40 patches/image, 3000 sampled images by default.
-        self.patch_size = self.opt.get('H_size', 64)
+        # Image-to-image mapping with pre-extracted L/H patch buffers. All
+        # sampling hyperparameters are REQUIRED from the sweep/config layer --
+        # no silent 64 / 40 / 3000 defaults.
+        self.patch_size = self._demand(opt, 'H_size')
 
-        self.num_patches_per_image = opt.get('num_patches_per_image', 40)
-        self.num_sampled = opt.get('num_sampled', 3000)
+        self.num_patches_per_image = self._demand(opt, 'num_patches_per_image')
+        self.num_sampled = self._demand(opt, 'num_sampled')
 
         # Disk-backed dataset: both paths mandatory and must be paired.
         assert self.paths_H, 'Error: H path is empty.'

@@ -44,6 +44,16 @@ def test_dnpatch_init_and_len(make_image_dir):
     assert len(ds) == 2 * 2  # num_sampled * num_patches_per_image
 
 
+def test_dnpatch_init_missing_required_raises(make_image_dir):
+    import pytest
+    d = make_image_dir(n=1, h=64, w=64)
+    # sigma is required -- a forgotten key must fail loud, not silently 25.
+    with pytest.raises(AssertionError):
+        DatasetDnPatch({"phase": "test", "n_channels": 3, "H_size": 64,
+                        "sigma_test": 25, "num_patches_per_image": 1,
+                        "num_sampled": 1, "dataroot_H": str(d)})
+
+
 # ------------------------------------------------------------
 # _make_sample
 # ------------------------------------------------------------

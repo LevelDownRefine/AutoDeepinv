@@ -110,14 +110,14 @@ SweepSpec ──► GridSearch(spec) ──► Task(领域单元: DenoisingTask)
 测试在 `tests/data/`：
 - `conftest.py` 提供 `write_rgb_png` / `make_image_dir` 两个合成图夹具（无 scipy、不提交二进制）。
 - `test_base_dataset.py` 覆盖基类契约；`test_dataset_{dncnn,fdncnn,ffdnet,dnpatch,plain,plainpatch}.py` 覆盖各子类（KAIR 原测试，保留）。
-- 运行：`uv run pytest tests/data/ -v -p no:cacheprovider`（与 CI 同 venv）。当前 `tests/data/` 共 **44 passed**。
+- 运行：`uv run pytest tests/data/ -v -p no:cacheprovider`（与 CI 同 venv）。当前 `tests/data/` 共 **50 passed**（含 6 个「缺必填超参即 fail loud」回归测试）。
 - 导入与项目一致（靠 `pythonpath=["AutoDeepInv"]`）：源码 `import utils.utils_image as util`，测试 `from data.dataset_x import DatasetX`。
 
 **严格审查要点（本项目纪律 §3）**：
 
 1. **`n_channels` 必填**：基类 `assert "n_channels" in opt`，不再有 `n_channels_default=3` 静默默认。
 2. **`paths_H` 改为「可选 + `len` 失败 loud」**（重要修正）：原 KAIR 基类 `paths_H = opt.get('paths_H') or get_image_paths(opt.get('dataroot_H'))` 在两者皆缺时静默置 `None`，会造出「空数据集却不报错」。初版我们把它改成「二选一否则 `assert`」，但 **TDD 发现这过严**——`DnCNN/FDnCNN/FFDNet` 在「合成/测试模式」下本就不需要磁盘路径（测试直接构造合成图调 `_make_sample`），KAIR 原测试正是这么用。修正为：`paths_H` 可选（都没有则为 `None`），但 `__len__` 在 `paths_H is None` 时 **`assert` 失败 loud**（绝不让训练在 0 张图上静默跑）；磁盘型子类（`DnPatch`/`Plain`/`PlainPatch`）在 `__init__` 里再 `assert paths_H` 必填。意图「绝不静默空训练」不变，只是把检查点从构造挪到长度查询。
-3. **子类默认值的静默-falsy bug**：原 `opt['X'] if opt['X'] else D` 在 `X=0`（合法值）时错误回退 `D`。全部改为 `opt.get('X', D)`，并用注释**写明每个默认值的理由**（patch 64、sigma 25/[0,75]、40 patches、3000 sampled 等——DnCNN 约定 / KAIR 兼容 / 被测试断言）。理由：领域标准默认值且 KAIR 测试依赖，属「有明确理由的默认」；自动化层实际永远显式传入这些被扫超参。
+3. **子类超参「无默认 + `_demand` 失败 loud」**（2026-07-25 二次收紧）：初版我们保留 `opt.get('X', D)` 并写理由注释，但那仍属「静默默认」——既违反本项目 §3「不设默认值除非有明确理由」，更关键的冲突是：sigma/patch_size/num_patches 正是 `GridSearch` 要扫的超参，把它们写死成类内默认值，等于把「该由上层注入的超参」藏进了类内部，形成埋雷（实例化漏传就静默拿到 64/25/40/3000，与 sweep 意图悄悄脱节）。现改为：所有超参 **必填**，经基类实例方法 `BaseDataset._demand(opt, key)` 取值（缺失即抛出**自动取自 `type(self).__name__` 的 owner-tagged** `AssertionError`，绝不静默回退；调用处只写 `self._demand(opt, 'H_size')`，不用传类名）。**唯一保留的默认是「派生型默认」**：`DatasetDnCNN`/`DatasetDnPatch` 的 `sigma_test = opt.get('sigma_test', self.sigma)`——测试噪声等级默认等于训练 sigma（单 sigma 训练/测试时），属推导而非惯例值。而 `FDnCNN`/`FFDNet` 的 `sigma` 是 `[min,max]` 训练区间、`sigma_test` 是独立标量，**无法从 sigma 推导**，故 `sigma_test` 也改为必填（去掉原魔数 25 默认）。`tests/data/` 新增 6 个 `test_*_init_missing_required_raises`，锁死「漏传超参即 fail loud」，防止日后重构偷偷加回默认。
 4. **去掉噪声 `print`**：`dataset_dncnn` 与 `dataset_plain/plainpatch` 构造 / `update_data` 里的 `print(...)` 删除——库代码在自动化循环里不应有 stdout 噪声。
 5. **结构不变量保留并强化**：`paths_H`/`paths_L` 配对长度一致、`paths_L` 缺则报错等断言保留；基类 `_load_img_*` 仍含非 `None` + 越界断言。
 

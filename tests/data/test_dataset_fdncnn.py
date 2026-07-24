@@ -3,7 +3,7 @@
 Covers:
   * ``_make_sample`` -- test mode exact noise (seed=0) + noise-level map M;
                         train mode patch pair (H, L with appended M).
-  * ``__init__``     -- H_size / sigma / sigma_test defaults and overrides.
+  * ``__init__``     -- H_size / sigma / sigma_test required (no defaults); explicit overrides.
   * ``__len__``      -- via a real image directory.
   * ``__getitem__``  -- end-to-end, tensor dtype / shape / values, L_path == H_path.
 """
@@ -78,13 +78,21 @@ def test_fdncnn_make_sample_train_is_patch_pair_with_map():
 # ------------------------------------------------------------
 # __init__
 # ------------------------------------------------------------
-def test_fdncnn_init_defaults():
+def test_fdncnn_init_required_values():
     ds = DatasetFDnCNN(_opt())
     assert ds.patch_size == 64
     assert ds.sigma == [0, 75]
     assert ds.sigma_min == 0
     assert ds.sigma_max == 75
     assert ds.sigma_test == 25
+
+
+def test_fdncnn_init_missing_required_raises():
+    import pytest
+    # sigma_test is required -- it cannot be derived from the [min,max] sigma
+    # range, so a forgotten key must fail loud (no magic 25).
+    with pytest.raises(AssertionError):
+        DatasetFDnCNN({"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75]})
 
 
 def test_fdncnn_init_explicit():

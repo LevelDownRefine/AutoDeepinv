@@ -9,13 +9,13 @@ class DatasetDnCNN(BaseDataset):
 
     def __init__(self, opt):
         super(DatasetDnCNN, self).__init__(opt)
-        # DnCNN convention: 64x64 training patches; sigma 25 is the standard
-        # AWGN level (sigma/255). Defaults kept for standalone/KAIR-compat use
-        # and asserted by the test suite; the automation layer always passes
-        # these explicitly as swept hyperparameters. opt.get() (not the
-        # `if x else default` form) so an explicitly-provided 0 is respected.
-        self.patch_size = opt.get('H_size', 64)
-        self.sigma = opt.get('sigma', 25)
+        # DnCNN hyperparameters are REQUIRED from the sweep/config layer -- no
+        # silent defaults (a forgotten H_size must fail loud, not silently
+        # train on 64x64). The only tolerated default is sigma_test, and only
+        # because it is *derived* (test noise level == train sigma); an explicit
+        # sigma_test still overrides it.
+        self.patch_size = self._demand(opt, 'H_size')
+        self.sigma = self._demand(opt, 'sigma')
         self.sigma_test = opt.get('sigma_test', self.sigma)
 
     def _make_noisy(self, img, sigma, seed=None):

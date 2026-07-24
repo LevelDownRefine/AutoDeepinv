@@ -42,6 +42,15 @@ def test_plain_init_defaults(make_image_dir):
     assert len(ds.paths_L) == 2
 
 
+def test_plain_init_missing_required_raises(make_image_dir):
+    import pytest
+    h = make_image_dir(n=1, name="h")
+    l = make_image_dir(n=1, name="l")
+    # H_size is required -- a forgotten key must fail loud, not silently 64.
+    with pytest.raises(AssertionError):
+        DatasetPlain({"n_channels": 3, "dataroot_H": str(h), "dataroot_L": str(l), "phase": "test"})
+
+
 def test_plain_init_paired_length_mismatch_raises(make_image_dir):
     import pytest
     h = make_image_dir(n=2, name="h")

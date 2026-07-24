@@ -4,7 +4,7 @@ Covers:
   * ``_make_noisy`` -- seeded RNG reproduces exact noise; unseeded call adds
                        AWGN (std == sigma/255) and differs from the input.
   * ``_make_sample`` -- test mode exact noise (seed=0); train mode patch pair.
-  * ``__init__``     -- H_size / sigma / sigma_test defaults and overrides.
+  * ``__init__``     -- H_size / sigma / sigma_test required (no defaults); explicit overrides.
   * ``__len__``      -- via a real image directory.
   * ``__getitem__``  -- end-to-end, tensor dtype / shape / values, L_path == H_path.
 """
@@ -102,11 +102,21 @@ def test_dncnn_make_sample_train_is_patch_pair():
 # ------------------------------------------------------------
 # __init__
 # ------------------------------------------------------------
-def test_dncnn_init_defaults():
+def test_dncnn_init_required_values():
     ds = DatasetDnCNN(_opt())
     assert ds.patch_size == 64
     assert ds.sigma == 25
     assert ds.sigma_test == 25
+
+
+def test_dncnn_init_missing_required_raises():
+    import pytest
+    # H_size and sigma are required -- a forgotten key must fail loud, not
+    # silently fall back to 64 / 25.
+    with pytest.raises(AssertionError):
+        DatasetDnCNN({"phase": "test", "n_channels": 3, "sigma": 25, "sigma_test": 25})
+    with pytest.raises(AssertionError):
+        DatasetDnCNN({"phase": "test", "n_channels": 3, "H_size": 64, "sigma_test": 25})
 
 
 def test_dncnn_init_explicit():

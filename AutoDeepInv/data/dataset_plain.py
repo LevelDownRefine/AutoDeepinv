@@ -9,8 +9,9 @@ class DatasetPlain(BaseDataset):
     def __init__(self, opt):
         super(DatasetPlain, self).__init__(opt)
         # Image-to-image mapping: both L and H are provided on disk (no
-        # synthesis). 64x64 is the default crop size; override via H_size.
-        self.patch_size = self.opt.get('H_size', 64)
+        # synthesis). patch_size (H_size) is REQUIRED from the sweep/config
+        # layer -- no silent 64 default.
+        self.patch_size = self._demand(opt, 'H_size')
 
         # Disk-backed dataset: both paths are mandatory and must be paired.
         assert self.paths_H, 'Error: H path is empty.'

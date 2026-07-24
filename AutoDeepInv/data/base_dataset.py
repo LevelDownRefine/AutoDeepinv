@@ -39,6 +39,14 @@ class BaseDataset(data.Dataset):
       * ``opt`` itself is intentionally NOT exhaustively checked for unknown
         keys: this base is meant to be subclassed, and subclasses legitimately
         add their own keys. The keys this base consumes are strictly required.
+      * Subclasses (the denoising datasets) likewise require their own
+        hyperparameters (``H_size``, ``sigma``, ``num_patches_per_image``,
+        ``num_sampled``, ...) in ``opt`` -- no silent ``.get()`` defaults. The
+        sweep/config layer is the single source of these values. A default is
+        tolerated only where it is *derived*, not *conventional*: e.g.
+        ``sigma_test`` defaulting to ``sigma`` when a model trains and tests at
+        one noise level is a derivation; a standalone convention value such as
+        FFDNet's ``sigma_test = 25`` is NOT a derivation and must be supplied.
     """
 
     def __init__(self, opt):
@@ -85,6 +93,23 @@ class BaseDataset(data.Dataset):
                 "must provide '%s' or '%s' in opt (neither given)" % (paths_key, root_key)
             )
         return None
+
+    def _demand(self, opt, key):
+        """Require ``key`` in ``opt`` and return it -- fail loud, never default.
+
+        Centralizes the "no silent default" discipline for subclass
+        hyperparameters. Instead of ``opt.get('H_size', 64)`` (which hides a
+        misconfiguration behind a magic 64), a subclass does
+        ``self.patch_size = self._demand(opt, 'H_size')`` and gets a clear,
+        class-tagged AssertionError when the sweep forgot to pass it. The owning
+        class name is taken automatically from ``type(self).__name__``, so call
+        sites never pass it (and cannot drift or typo it).
+        """
+        owner = type(self).__name__
+        assert key in opt, \
+            "%s requires '%s' in opt -- no default value is allowed " \
+            "(supply it from the sweep/config layer)" % (owner, key)
+        return opt[key]
 
     def _load_img_H(self, index):
         """Read a uint8 HWC (RGB) high-quality image for ``index`` from disk."""

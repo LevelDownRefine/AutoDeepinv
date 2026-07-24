@@ -14,13 +14,14 @@ class DatasetFDnCNN(BaseDataset):
 
     def __init__(self, opt):
         super(DatasetFDnCNN, self).__init__(opt)
-        # FDnCNN convention: 64x64 patches; sigma drawn from [0,75] in training,
-        # fixed at 25 for the (seeded, reproducible) test path. Defaults kept for
-        # standalone/KAIR-compat use and asserted by the tests.
-        self.patch_size = opt.get('H_size', 64)
-        self.sigma = opt.get('sigma', [0, 75])
+        # FDnCNN hyperparameters are REQUIRED from the sweep/config layer -- no
+        # silent defaults. Unlike DnCNN, sigma is a [min,max] training *range*
+        # and sigma_test is a separate scalar test level, so sigma_test cannot
+        # be derived from sigma; it must be supplied explicitly (no magic 25).
+        self.patch_size = self._demand(opt, 'H_size')
+        self.sigma = self._demand(opt, 'sigma')
         self.sigma_min, self.sigma_max = self.sigma[0], self.sigma[1]
-        self.sigma_test = opt.get('sigma_test', 25)
+        self.sigma_test = self._demand(opt, 'sigma_test')
 
     def _make_sample(self, img_H, index):
         """Build (H, L): train crops+augments then adds AWGN(sigma) + M; test adds seeded AWGN(sigma_test) + M.

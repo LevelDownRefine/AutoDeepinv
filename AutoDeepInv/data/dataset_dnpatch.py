@@ -16,15 +16,14 @@ class DatasetDnPatch(BaseDataset):
 
     def __init__(self, opt):
         super(DatasetDnPatch, self).__init__(opt)
-        # DnPatch convention: 64x64 patches, sigma 25, 40 patches/image, 3000
-        # sampled images. Pre-extracts H patches in __init__. Defaults kept for
-        # standalone use and asserted by the tests; the automation layer passes
-        # these as swept hyperparameters.
-        self.patch_size = opt.get('H_size', 64)
-        self.sigma = opt.get('sigma', 25)
+        # DnPatch hyperparameters are REQUIRED from the sweep/config layer -- no
+        # silent defaults. sigma_test is the only tolerated default, and only
+        # because it is *derived* (test noise level == train sigma).
+        self.patch_size = self._demand(opt, 'H_size')
+        self.sigma = self._demand(opt, 'sigma')
         self.sigma_test = opt.get('sigma_test', self.sigma)
-        self.num_patches_per_image = opt.get('num_patches_per_image', 40)
-        self.num_sampled = opt.get('num_sampled', 3000)
+        self.num_patches_per_image = self._demand(opt, 'num_patches_per_image')
+        self.num_sampled = self._demand(opt, 'num_sampled')
 
         # Disk-backed dataset: paths_H is mandatory (synthesis mode is not valid
         # here, since patches are pre-extracted from disk in update_data()).
