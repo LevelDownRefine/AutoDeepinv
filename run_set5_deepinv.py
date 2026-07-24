@@ -32,7 +32,7 @@ from typing import Callable
 
 import numpy as np
 import torch
-from utils_image import uint2single, single2tensor4, imread_uint   # vendored from KAIR/utils
+from utils.utils_image import uint2single, single2tensor4, imread_uint   # vendored from KAIR/utils
 
 # --- paths come from the environment (set by run.bat) -----------------------
 # Run via run.bat. Running this file directly requires SHIM_ROOT,
