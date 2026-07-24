@@ -97,3 +97,32 @@ SweepSpec ──► GridSearch(spec) ──► Task(领域单元: DenoisingTask)
 **纪律落地**：无默认值（空固定参数 `default_factory=dict` 除外）；`__post_init__` 严格 assert；dict 装载（`_strict_consume`）与 `Task` 的 `**kwargs` 均严格检查（必填存在、无残留未知 key）。
 
 > 草案骨架，尚未接入 deepinv/KAIR 真实训练；`DenoisingTask.train/evaluate` 为占位（`raise NotImplementedError`），真实实现接 deepinv+KAIR。回存放 `RunResult` 集合、做端到端 diff 的回归机制尚未落地（见上文「回归 / 验收方法论」）。
+
+### 6. vendored KAIR 数据层（见 `AutoDeepInv/data/`）
+
+从 KAIR `data/` 搬入本项目源码包（`AutoDeepInv/data/`）并**按本项目纪律严格审查改写**。共 1 基类 + 6 去噪相关数据集：
+
+- `base_dataset.py` — 共享基类（见下）。
+- `dataset_dncnn.py` / `dataset_fdncnn.py` / `dataset_ffdnet.py` — **纯去噪**：固定/可变 sigma 的 AWGN，分别输出 `(L,H)` / `(L,H,M噪声水平图)` / `(L,H,C噪声水平标量)`。
+- `dataset_dnpatch.py` — DnCNN 思路的 **patch 预抽取**版（构造时把 H patch 抽进 buffer 再退化）。
+- `dataset_plain.py` / `dataset_plainpatch.py` — **通用 image-to-image 配对**数据集（KAIR 也用于去噪训练；load 双方 L/H）。
+
+测试在 `tests/data/`：
+- `conftest.py` 提供 `write_rgb_png` / `make_image_dir` 两个合成图夹具（无 scipy、不提交二进制）。
+- `test_base_dataset.py` 覆盖基类契约；`test_dataset_{dncnn,fdncnn,ffdnet,dnpatch,plain,plainpatch}.py` 覆盖各子类（KAIR 原测试，保留）。
+- 运行：`uv run pytest tests/data/ -v -p no:cacheprovider`（与 CI 同 venv）。当前 `tests/data/` 共 **44 passed**。
+- 导入与项目一致（靠 `pythonpath=["AutoDeepInv"]`）：源码 `import utils.utils_image as util`，测试 `from data.dataset_x import DatasetX`。
+
+**严格审查要点（本项目纪律 §3）**：
+
+1. **`n_channels` 必填**：基类 `assert "n_channels" in opt`，不再有 `n_channels_default=3` 静默默认。
+2. **`paths_H` 改为「可选 + `len` 失败 loud」**（重要修正）：原 KAIR 基类 `paths_H = opt.get('paths_H') or get_image_paths(opt.get('dataroot_H'))` 在两者皆缺时静默置 `None`，会造出「空数据集却不报错」。初版我们把它改成「二选一否则 `assert`」，但 **TDD 发现这过严**——`DnCNN/FDnCNN/FFDNet` 在「合成/测试模式」下本就不需要磁盘路径（测试直接构造合成图调 `_make_sample`），KAIR 原测试正是这么用。修正为：`paths_H` 可选（都没有则为 `None`），但 `__len__` 在 `paths_H is None` 时 **`assert` 失败 loud**（绝不让训练在 0 张图上静默跑）；磁盘型子类（`DnPatch`/`Plain`/`PlainPatch`）在 `__init__` 里再 `assert paths_H` 必填。意图「绝不静默空训练」不变，只是把检查点从构造挪到长度查询。
+3. **子类默认值的静默-falsy bug**：原 `opt['X'] if opt['X'] else D` 在 `X=0`（合法值）时错误回退 `D`。全部改为 `opt.get('X', D)`，并用注释**写明每个默认值的理由**（patch 64、sigma 25/[0,75]、40 patches、3000 sampled 等——DnCNN 约定 / KAIR 兼容 / 被测试断言）。理由：领域标准默认值且 KAIR 测试依赖，属「有明确理由的默认」；自动化层实际永远显式传入这些被扫超参。
+4. **去掉噪声 `print`**：`dataset_dncnn` 与 `dataset_plain/plainpatch` 构造 / `update_data` 里的 `print(...)` 删除——库代码在自动化循环里不应有 stdout 噪声。
+5. **结构不变量保留并强化**：`paths_H`/`paths_L` 配对长度一致、`paths_L` 缺则报错等断言保留；基类 `_load_img_*` 仍含非 `None` + 越界断言。
+
+**TDD 验证（非空过）**：
+- 基类：严格测试先跑 KAIR 原版 → `test_base_requires_n_channels` 失败（证原版不合规），换严格版 → 通过；`paths_H` 策略经「二选一 assert → TDD 暴露过严 → 改可选+len 守卫」迭代，最终 `test_base_paths_H_optional_but_len_fails_loud` 证明合成模式可构造、但 `len()` 在无路径时 fail loud。
+- 6 子类：先原样拷入（此时仍继承我们初版「paths_H 必填」基类）→ 14 个测试**失败**（dncnn/fdncnn/ffdnet 在合成模式构造无路径被 assert 拦下）；把基类 `paths_H` 放宽为可选+len 守卫后 → **44 passed**。
+
+**有意留白**：`opt`（含子类 opt）**不做**未知 key 穷举——基类面向子类扩展，子类加自己的 key（scale/sigma 等）。采取「基类消费 key 严格必填 + 子类 key 放行」。若日后要收紧再议。
