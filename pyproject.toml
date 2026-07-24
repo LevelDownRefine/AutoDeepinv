@@ -25,11 +25,13 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# Always put the project root on sys.path so `import utils.utils_image` resolves
-# regardless of how pytest is invoked (plain `pytest`, `uv run pytest`, or
-# `python -m pytest` all behave the same). Without this, pytest's default
-# prepend import mode inserts tests/utils/ instead of the repo root.
-pythonpath = ["."]
+# Source code lives in the `AutoDeepInv/` package subdir (repo root is also
+# named AutoDeepInv, so this is the inner one: <repo>/AutoDeepInv/AutoDeepInv/).
+# Putting it on sys.path lets the existing `import utils.utils_image` /
+# `import config_schema` (tests + scripts) keep resolving after the migration,
+# without editing those files. Without this, pytest's prepend import mode would
+# insert tests/utils/ and `import utils` would fail.
+pythonpath = ["AutoDeepInv"]
 testpaths = ["tests"]
 
 [tool.uv]
