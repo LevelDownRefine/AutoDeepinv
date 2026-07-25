@@ -5,7 +5,7 @@ Covers:
                         train mode patch pair (H, L with appended M).
   * ``__init__``     -- H_size / sigma / sigma_test required (no defaults); explicit overrides.
   * ``__len__``      -- via a real image directory.
-  * ``__getitem__``  -- end-to-end, tensor dtype / shape / values, L_path == H_path.
+  * ``__getitem__``  -- end-to-end, tensor dtype / shape / values.
 """
 import numpy as np
 import torch
@@ -32,10 +32,10 @@ def _opt(**kw):
 # ------------------------------------------------------------
 def test_fdncnn_make_sample_test_exact_noise_and_map():
     sigma_test = 30
-    ds = DatasetFDnCNN(_opt(H_size=64, sigma=[0, 75], sigma_test=sigma_test))
+    ds = DatasetFDnCNN(**_opt(H_size=64, sigma=[0, 75], sigma_test=sigma_test))
     img_H = _img_H(64, 64, seed=7)
 
-    img_H_out, img_L = ds._make_sample(img_H, 0)
+    img_H_out, img_L = ds._make_sample(img_H)
 
     # H is converted to single precision, no noise added (3 channels).
     expected_H = util.uint2single(img_H)
@@ -63,10 +63,10 @@ def test_fdncnn_make_sample_test_exact_noise_and_map():
 
 def test_fdncnn_make_sample_train_is_patch_pair_with_map():
     patch = 48
-    ds = DatasetFDnCNN(_opt(phase="train", H_size=patch, sigma=[0, 75], sigma_test=25))
+    ds = DatasetFDnCNN(**_opt(phase="train", H_size=patch, sigma=[0, 75], sigma_test=25))
     img_H = _img_H(80, 80, seed=3)
 
-    img_H_out, img_L = ds._make_sample(img_H, 0)
+    img_H_out, img_L = ds._make_sample(img_H)
     assert img_H_out.shape == (patch, patch, 3)
     assert img_L.shape == (patch, patch, 4)  # 3 channels + noise-level map
     assert img_H_out.dtype == np.float32
@@ -79,7 +79,7 @@ def test_fdncnn_make_sample_train_is_patch_pair_with_map():
 # __init__
 # ------------------------------------------------------------
 def test_fdncnn_init_required_values():
-    ds = DatasetFDnCNN(_opt())
+    ds = DatasetFDnCNN(**_opt())
     assert ds.patch_size == 64
     assert ds.sigma == [0, 75]
     assert ds.sigma_min == 0
@@ -92,11 +92,11 @@ def test_fdncnn_init_missing_required_raises():
     # sigma_test is required -- it cannot be derived from the [min,max] sigma
     # range, so a forgotten key must fail loud (no magic 25).
     with pytest.raises(AssertionError):
-        DatasetFDnCNN({"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75]})
+        DatasetFDnCNN(**{"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75]})
 
 
 def test_fdncnn_init_explicit():
-    ds = DatasetFDnCNN(_opt(H_size=48, sigma=[10, 50], sigma_test=40))
+    ds = DatasetFDnCNN(**_opt(H_size=48, sigma=[10, 50], sigma_test=40))
     assert ds.patch_size == 48
     assert ds.sigma == [10, 50]
     assert ds.sigma_min == 10
@@ -109,7 +109,7 @@ def test_fdncnn_init_explicit():
 # ------------------------------------------------------------
 def test_fdncnn_len(make_image_dir):
     d = make_image_dir(n=3)
-    ds = DatasetFDnCNN(_opt(dataroot_H=str(d)))
+    ds = DatasetFDnCNN(**_opt(dataroot_H=str(d)))
     assert len(ds) == 3
 
 
@@ -118,15 +118,14 @@ def test_fdncnn_len(make_image_dir):
 # ------------------------------------------------------------
 def test_fdncnn_getitem(make_image_dir):
     d = make_image_dir(n=1, h=64, w=64)
-    ds = DatasetFDnCNN(_opt(dataroot_H=str(d), sigma_test=30))
+    ds = DatasetFDnCNN(**_opt(dataroot_H=str(d), sigma_test=30))
     img_H = ds._load_img_H(0)
-    exp_H, exp_L = ds._make_sample(img_H, 0)
+    exp_H, exp_L = ds._make_sample(img_H)
     out = ds[0]
 
-    assert set(out.keys()) == {"L", "H", "L_path", "H_path"}
-    assert out["H"].dtype == torch.float32
-    assert out["L"].dtype == torch.float32
-    assert out["L"].shape == torch.Size([4, 64, 64])
-    assert torch.equal(out["H"], util.single2tensor3(exp_H))
-    assert torch.equal(out["L"], util.single2tensor3(exp_L))
-    assert out["L_path"] == out["H_path"]
+    assert set(out.keys()) == {"img_L", "img_H"}
+    assert out["img_H"].dtype == torch.float32
+    assert out["img_L"].dtype == torch.float32
+    assert out["img_L"].shape == torch.Size([4, 64, 64])
+    assert torch.equal(out["img_H"], util.single2tensor3(exp_H))
+    assert torch.equal(out["img_L"], util.single2tensor3(exp_L))

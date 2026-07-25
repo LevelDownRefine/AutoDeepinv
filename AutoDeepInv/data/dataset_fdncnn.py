@@ -12,24 +12,26 @@ class DatasetFDnCNN(BaseDataset):
     the noise level so the network can condition on it.
     """
 
-    def __init__(self, opt):
-        super(DatasetFDnCNN, self).__init__(opt)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # FDnCNN hyperparameters are REQUIRED from the sweep/config layer -- no
         # silent defaults. Unlike DnCNN, sigma is a [min,max] training *range*
         # and sigma_test is a separate scalar test level, so sigma_test cannot
         # be derived from sigma; it must be supplied explicitly (no magic 25).
-        self.patch_size = self._demand(opt, 'H_size')
-        self.sigma = self._demand(opt, 'sigma')
+        self.patch_size = self._pop_kwargs(self._kwargs, 'H_size')
+        self.sigma = self._pop_kwargs(self._kwargs, 'sigma')
         self.sigma_min, self.sigma_max = self.sigma[0], self.sigma[1]
-        self.sigma_test = self._demand(opt, 'sigma_test')
+        self.sigma_test = self._pop_kwargs(self._kwargs, 'sigma_test')
+        assert not self._kwargs, "unknown DatasetFDnCNN keys: %s" % sorted(self._kwargs)
+        del self._kwargs
 
-    def _make_sample(self, img_H, index):
+    def _make_sample(self, img_H):
         """Build (H, L): train crops+augments then adds AWGN(sigma) + M; test adds seeded AWGN(sigma_test) + M.
 
         L has one extra channel (the noise-level map M) appended to H's channels.
         The map is constant over space and equals sigma/255 (sigma_test/255 in test).
         """
-        if self.opt['phase'] == 'train':
+        if self.phase == 'train':
             # get L/H/M patch pairs
             H, W, _ = img_H.shape
             rnd_h = random.randint(0, max(0, H - self.patch_size))
@@ -60,9 +62,8 @@ class DatasetFDnCNN(BaseDataset):
         return img_H, img_L
 
     def __getitem__(self, index):
-        """Return ``{'L', 'H', 'L_path', 'H_path'}`` as float32 tensors."""
-        H_path = self.paths_H[index] if self.paths_H is not None else ''
+        """Return ``{'img_L', 'img_H'}`` as float32 tensors."""
         img_H = self._load_img_H(index)
-        img_H, img_L = self._make_sample(img_H, index)
+        img_H, img_L = self._make_sample(img_H)
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
-        return {'L': img_L, 'H': img_H, 'L_path': H_path, 'H_path': H_path}
+        return {'img_L': img_L, 'img_H': img_H}

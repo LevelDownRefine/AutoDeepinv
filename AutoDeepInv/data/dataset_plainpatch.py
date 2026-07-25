@@ -7,15 +7,17 @@ from data.base_dataset import BaseDataset
 class DatasetPlainPatch(BaseDataset):
     """Image-to-image mapping dataset that pre-extracts L/H patch pairs into buffers; both paths_L and paths_H required."""
 
-    def __init__(self, opt):
-        super(DatasetPlainPatch, self).__init__(opt)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # Image-to-image mapping with pre-extracted L/H patch buffers. All
         # sampling hyperparameters are REQUIRED from the sweep/config layer --
         # no silent 64 / 40 / 3000 defaults.
-        self.patch_size = self._demand(opt, 'H_size')
+        self.patch_size = self._pop_kwargs(self._kwargs, 'H_size')
 
-        self.num_patches_per_image = self._demand(opt, 'num_patches_per_image')
-        self.num_sampled = self._demand(opt, 'num_sampled')
+        self.num_patches_per_image = self._pop_kwargs(self._kwargs, 'num_patches_per_image')
+        self.num_sampled = self._pop_kwargs(self._kwargs, 'num_sampled')
+        assert not self._kwargs, "unknown DatasetPlainPatch keys: %s" % sorted(self._kwargs)
+        del self._kwargs
 
         # Disk-backed dataset: both paths mandatory and must be paired.
         assert self.paths_H, 'Error: H path is empty.'
@@ -77,21 +79,21 @@ class DatasetPlainPatch(BaseDataset):
 
         return L_patches, H_patches
 
-    def _make_sample(self, img_H, img_L, index):
+    def _make_sample(self, img_H, img_L):
         """Augment the paired H/L patch (train flips/rotates both with the same mode); test returns them unchanged."""
-        if self.opt['phase'] == 'train':
+        if self.phase == 'train':
             mode = random.randint(0, 7)
             img_L = util.augment_img(img_L, mode=mode)
             img_H = util.augment_img(img_H, mode=mode)
         return img_H, img_L
 
     def __getitem__(self, index):
-        """Return ``{'L', 'H'}`` as float32 tensors (uint8->tensor)."""
-        if self.opt['phase'] == 'train':
+        """Return ``{'img_L', 'img_H'}`` as float32 tensors (uint8->tensor)."""
+        if self.phase == 'train':
             patch_L = self.L_data[index]
             patch_H = self.H_data[index]
 
-            patch_H, patch_L = self._make_sample(patch_H, patch_L, index)
+            patch_H, patch_L = self._make_sample(patch_H, patch_L)
 
             patch_L, patch_H = util.uint2tensor3(patch_L), util.uint2tensor3(patch_H)
         else:
@@ -100,11 +102,11 @@ class DatasetPlainPatch(BaseDataset):
             patch_L = util.imread_uint(L_path, self.n_channels)
             patch_H = util.imread_uint(H_path, self.n_channels)
 
-            patch_H, patch_L = self._make_sample(patch_H, patch_L, index)
+            patch_H, patch_L = self._make_sample(patch_H, patch_L)
 
             patch_L, patch_H = util.uint2tensor3(patch_L), util.uint2tensor3(patch_H)
 
-        return {'L': patch_L, 'H': patch_H}
+        return {'img_L': patch_L, 'img_H': patch_H}
 
     def __len__(self):
         return self.total_patches

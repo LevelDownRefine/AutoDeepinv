@@ -6,12 +6,14 @@ from data.base_dataset import BaseDataset
 class DatasetPlain(BaseDataset):
     """Image-to-image mapping dataset: loads both L and H (paths_L and paths_H required)."""
 
-    def __init__(self, opt):
-        super(DatasetPlain, self).__init__(opt)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # Image-to-image mapping: both L and H are provided on disk (no
         # synthesis). patch_size (H_size) is REQUIRED from the sweep/config
         # layer -- no silent 64 default.
-        self.patch_size = self._demand(opt, 'H_size')
+        self.patch_size = self._pop_kwargs(self._kwargs, 'H_size')
+        assert not self._kwargs, "unknown DatasetPlain keys: %s" % sorted(self._kwargs)
+        del self._kwargs
 
         # Disk-backed dataset: both paths are mandatory and must be paired.
         assert self.paths_H, 'Error: H path is empty.'
@@ -19,12 +21,9 @@ class DatasetPlain(BaseDataset):
         if self.paths_L and self.paths_H:
             assert len(self.paths_L) == len(self.paths_H), 'L/H mismatch - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
 
-    def _make_sample(self, img_H, index):
-        """Build (H, L, L_path): test returns the full paired images; train crops+augments a paired patch."""
-        L_path = self.paths_L[index]
-        img_L = util.imread_uint(L_path, self.n_channels)
-
-        if self.opt['phase'] == 'train':
+    def _make_sample(self, img_H, img_L):
+        """Build (H, L): test returns the full paired images; train crops+augments a paired patch."""
+        if self.phase == 'train':
             H, W, _ = img_H.shape
 
             # --------------------------------
@@ -43,12 +42,12 @@ class DatasetPlain(BaseDataset):
 
             img_L, img_H = patch_L, patch_H
 
-        return img_H, img_L, L_path
+        return img_H, img_L
 
     def __getitem__(self, index):
-        """Return ``{'L', 'H', 'L_path', 'H_path'}`` as float32 tensors (uint8->tensor)."""
-        H_path = self.paths_H[index] if self.paths_H is not None else ''
+        """Return ``{'img_L', 'img_H'}`` as float32 tensors (uint8->tensor)."""
         img_H = self._load_img_H(index)
-        img_H, img_L, L_path = self._make_sample(img_H, index)
+        img_L = self._load_img_L(index)
+        img_H, img_L = self._make_sample(img_H, img_L)
         img_H, img_L = util.uint2tensor3(img_H), util.uint2tensor3(img_L)
-        return {'L': img_L, 'H': img_H, 'L_path': L_path, 'H_path': H_path}
+        return {'img_L': img_L, 'img_H': img_H}

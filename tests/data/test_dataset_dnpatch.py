@@ -36,7 +36,7 @@ def _opt(**kw):
 # ------------------------------------------------------------
 def test_dnpatch_init_and_len(make_image_dir):
     d = make_image_dir(n=3, h=64, w=64)
-    ds = DatasetDnPatch(_opt(dataroot_H=str(d), num_sampled=2, num_patches_per_image=2))
+    ds = DatasetDnPatch(**_opt(dataroot_H=str(d), num_sampled=2, num_patches_per_image=2))
     assert ds.patch_size == 64
     assert ds.sigma == 25
     assert ds.sigma_test == 25
@@ -49,12 +49,12 @@ def test_dnpatch_init_missing_required_raises(make_image_dir):
     d = make_image_dir(n=1, h=64, w=64)
     # sigma is required -- a forgotten key must fail loud, not silently 25.
     with pytest.raises(AssertionError):
-        DatasetDnPatch({"phase": "test", "n_channels": 3, "H_size": 64,
+        DatasetDnPatch(**{"phase": "test", "n_channels": 3, "H_size": 64,
                         "sigma_test": 25, "num_patches_per_image": 1,
                         "num_sampled": 1, "dataroot_H": str(d)})
     # sigma_test is required too -- a forgotten key must fail loud.
     with pytest.raises(AssertionError):
-        DatasetDnPatch({"phase": "test", "n_channels": 3, "H_size": 64,
+        DatasetDnPatch(**{"phase": "test", "n_channels": 3, "H_size": 64,
                         "sigma": 25, "num_patches_per_image": 1,
                         "num_sampled": 1, "dataroot_H": str(d)})
 
@@ -65,11 +65,11 @@ def test_dnpatch_init_missing_required_raises(make_image_dir):
 def test_dnpatch_make_sample_test_exact_noise(make_image_dir):
     sigma_test = 30
     d = make_image_dir(n=1, h=64, w=64)
-    ds = DatasetDnPatch(_opt(dataroot_H=str(d), num_sampled=1, num_patches_per_image=1,
+    ds = DatasetDnPatch(**_opt(dataroot_H=str(d), num_sampled=1, num_patches_per_image=1,
                              phase='test', H_size=64, sigma=25, sigma_test=sigma_test))
     known_H = _img_H(64, 64, seed=7)
 
-    img_H_out, img_L = ds._make_sample(known_H, 0)
+    img_H_out, img_L = ds._make_sample(known_H)
 
     exp_H = util.uint2single(known_H)
     assert np.array_equal(img_H_out, exp_H)
@@ -82,13 +82,13 @@ def test_dnpatch_make_sample_test_exact_noise(make_image_dir):
 
 def test_dnpatch_make_sample_train_is_noisy_patch(make_image_dir):
     d = make_image_dir(n=1, h=64, w=64)
-    ds = DatasetDnPatch(_opt(dataroot_H=str(d), num_sampled=1, num_patches_per_image=1,
+    ds = DatasetDnPatch(**_opt(dataroot_H=str(d), num_sampled=1, num_patches_per_image=1,
                              phase='train', H_size=48, sigma=25, sigma_test=25))
     known_H = _img_H(48, 48, seed=3)
 
     random.seed(11)
     torch.manual_seed(11)
-    img_H_out, img_L = ds._make_sample(known_H, 0)
+    img_H_out, img_L = ds._make_sample(known_H)
 
     random.seed(11)
     torch.manual_seed(11)
@@ -108,11 +108,10 @@ def test_dnpatch_make_sample_train_is_noisy_patch(make_image_dir):
 # ------------------------------------------------------------
 def test_dnpatch_getitem(make_image_dir):
     d = make_image_dir(n=3, h=64, w=64)
-    ds = DatasetDnPatch(_opt(dataroot_H=str(d), num_sampled=2, num_patches_per_image=1, phase='test', H_size=64))
+    ds = DatasetDnPatch(**_opt(dataroot_H=str(d), num_sampled=2, num_patches_per_image=1, phase='test', H_size=64))
     out = ds[0]
 
-    assert set(out.keys()) == {"L", "H", "L_path", "H_path"}
-    assert out["H"].dtype == torch.float32 and out["L"].dtype == torch.float32
-    assert out["L"].shape == (3, 64, 64)
-    assert out["H"].shape == (3, 64, 64)
-    assert out["L_path"] == out["H_path"]
+    assert set(out.keys()) == {"img_L", "img_H"}
+    assert out["img_H"].dtype == torch.float32 and out["img_L"].dtype == torch.float32
+    assert out["img_L"].shape == (3, 64, 64)
+    assert out["img_H"].shape == (3, 64, 64)

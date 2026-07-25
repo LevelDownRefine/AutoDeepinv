@@ -14,16 +14,18 @@ class DatasetDnPatch(BaseDataset):
     ``sigma_test/255`` numpy AWGN (deterministic, testable).
     """
 
-    def __init__(self, opt):
-        super(DatasetDnPatch, self).__init__(opt)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # DnPatch hyperparameters are REQUIRED from the sweep/config layer -- no
         # silent defaults, sigma_test included (see DatasetDnCNN for why the
         # train==test assumption is not a safe fallback).
-        self.patch_size = self._demand(opt, 'H_size')
-        self.sigma = self._demand(opt, 'sigma')
-        self.sigma_test = self._demand(opt, 'sigma_test')
-        self.num_patches_per_image = self._demand(opt, 'num_patches_per_image')
-        self.num_sampled = self._demand(opt, 'num_sampled')
+        self.patch_size = self._pop_kwargs(self._kwargs, 'H_size')
+        self.sigma = self._pop_kwargs(self._kwargs, 'sigma')
+        self.sigma_test = self._pop_kwargs(self._kwargs, 'sigma_test')
+        self.num_patches_per_image = self._pop_kwargs(self._kwargs, 'num_patches_per_image')
+        self.num_sampled = self._pop_kwargs(self._kwargs, 'num_sampled')
+        assert not self._kwargs, "unknown DatasetDnPatch keys: %s" % sorted(self._kwargs)
+        del self._kwargs
 
         # Disk-backed dataset: paths_H is mandatory (synthesis mode is not valid
         # here, since patches are pre-extracted from disk in update_data()).
@@ -60,16 +62,16 @@ class DatasetDnPatch(BaseDataset):
 
     def _load_img_H(self, index):
         """Return the pre-extracted H patch (train) or read the full H image (test) from disk."""
-        if self.opt['phase'] == 'train':
+        if self.phase == 'train':
             return self.H_data[index]
         return util.imread_uint(self.paths_H[index], self.n_channels)
 
     def __len__(self):
         return len(self.H_data)
 
-    def _make_sample(self, img_H, index):
+    def _make_sample(self, img_H):
         """Build (H, L): train augments a patch then adds torch AWGN(sigma); test adds seeded numpy AWGN(sigma_test)."""
-        if self.opt['phase'] == 'train':
+        if self.phase == 'train':
             mode = random.randint(0, 7)
             img_H = util.augment_img(img_H, mode=mode)
             img_H = util.uint2single(img_H)
@@ -85,13 +87,8 @@ class DatasetDnPatch(BaseDataset):
             return img_H, img_L
 
     def __getitem__(self, index):
-        """Return ``{'L', 'H', 'L_path', 'H_path'}`` as float32 tensors."""
-        if self.opt['phase'] == 'train':
-            H_path = 'toy.png'
-        else:
-            H_path = self.paths_H[index]
+        """Return ``{'img_L', 'img_H'}`` as float32 tensors."""
         img_H = self._load_img_H(index)
-        img_H, img_L = self._make_sample(img_H, index)
+        img_H, img_L = self._make_sample(img_H)
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
-        L_path = H_path
-        return {'L': img_L, 'H': img_H, 'L_path': L_path, 'H_path': H_path}
+        return {'img_L': img_L, 'img_H': img_H}

@@ -13,24 +13,26 @@ class DatasetFFDNet(BaseDataset):
     conditioning input rather than via a concatenated noise-level map.
     """
 
-    def __init__(self, opt):
-        super(DatasetFFDNet, self).__init__(opt)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         # FFDNet hyperparameters are REQUIRED from the sweep/config layer -- no
         # silent defaults. sigma is a [min,max] training *range* and sigma_test
         # is a separate scalar test level (cannot be derived from sigma), so it
         # must be supplied explicitly (no magic 25).
-        self.patch_size = self._demand(opt, 'H_size')
-        self.sigma = self._demand(opt, 'sigma')
+        self.patch_size = self._pop_kwargs(self._kwargs, 'H_size')
+        self.sigma = self._pop_kwargs(self._kwargs, 'sigma')
         self.sigma_min, self.sigma_max = self.sigma[0], self.sigma[1]
-        self.sigma_test = self._demand(opt, 'sigma_test')
+        self.sigma_test = self._pop_kwargs(self._kwargs, 'sigma_test')
+        assert not self._kwargs, "unknown DatasetFFDNet keys: %s" % sorted(self._kwargs)
+        del self._kwargs
 
-    def _make_sample(self, img_H, index):
+    def _make_sample(self, img_H):
         """Build (H, L, noise_level): train crops+augments then adds AWGN(sigma); test adds seeded AWGN(sigma_test).
 
         Returns the per-sample noise level (sigma/255) as a scalar so ``__getitem__``
         can hand it to the network as the ``C`` tensor.
         """
-        if self.opt['phase'] == 'train':
+        if self.phase == 'train':
             # get L/H/sigma patch pairs
             H, W, _ = img_H.shape
             rnd_h = random.randint(0, max(0, H - self.patch_size))
@@ -57,10 +59,9 @@ class DatasetFFDNet(BaseDataset):
         return img_H, img_L, noise_level
 
     def __getitem__(self, index):
-        """Return ``{'L', 'H', 'C', 'L_path', 'H_path'}`` as float32 tensors."""
-        H_path = self.paths_H[index] if self.paths_H is not None else ''
+        """Return ``{'img_L', 'img_H', 'C'}`` as float32 tensors (C = noise level)."""
         img_H = self._load_img_H(index)
-        img_H, img_L, noise_level = self._make_sample(img_H, index)
+        img_H, img_L, noise_level = self._make_sample(img_H)
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
         C = torch.FloatTensor([noise_level]).view(1, 1, 1)
-        return {'L': img_L, 'H': img_H, 'C': C, 'L_path': H_path, 'H_path': H_path}
+        return {'img_L': img_L, 'img_H': img_H, 'C': C}

@@ -46,7 +46,7 @@ def _opt(roots, phase="train", num_sampled=2, num_patches=3, H_size=64):
 # ------------------------------------------------------------
 def test_plainpatch_builds_patch_buffers(tmp_path, write_rgb_png):
     roots = _make_roots(tmp_path, write_rgb_png)
-    ds = DatasetPlainPatch(_opt(roots))
+    ds = DatasetPlainPatch(**_opt(roots))
     expected = 2 * 3  # num_sampled * num_patches_per_image
     assert len(ds) == expected
     assert ds.H_data.shape == (expected, 64, 64, 3)
@@ -58,7 +58,7 @@ def test_plainpatch_init_missing_required_raises(tmp_path, write_rgb_png):
     roots = _make_roots(tmp_path, write_rgb_png)
     # num_sampled is required -- a forgotten key must fail loud (no magic 3000).
     with pytest.raises(AssertionError):
-        DatasetPlainPatch({"n_channels": 3, "H_size": 64,
+        DatasetPlainPatch(**{"n_channels": 3, "H_size": 64,
                            "num_patches_per_image": 3, "dataroot_H": roots["dataroot_H"],
                            "dataroot_L": roots["dataroot_L"], "phase": "train"})
 
@@ -68,10 +68,10 @@ def test_plainpatch_init_missing_required_raises(tmp_path, write_rgb_png):
 # ------------------------------------------------------------
 def test_plainpatch_make_sample_test_identity(tmp_path, write_rgb_png):
     roots = _make_roots(tmp_path, write_rgb_png)
-    ds = DatasetPlainPatch(_opt(roots, phase="test"))
+    ds = DatasetPlainPatch(**_opt(roots, phase="test"))
     img_H = ds._load_img_H(0)
     img_L = ds._load_img_L(0)
-    out_H, out_L = ds._make_sample(img_H, img_L, 0)
+    out_H, out_L = ds._make_sample(img_H, img_L)
     assert np.array_equal(out_H, img_H)
     assert np.array_equal(out_L, img_L)
 
@@ -81,14 +81,14 @@ def test_plainpatch_make_sample_test_identity(tmp_path, write_rgb_png):
 # ------------------------------------------------------------
 def test_plainpatch_make_sample_train_augment_exact(tmp_path, write_rgb_png):
     roots = _make_roots(tmp_path, write_rgb_png)
-    ds = DatasetPlainPatch(_opt(roots, phase="train"))
+    ds = DatasetPlainPatch(**_opt(roots, phase="train"))
     img_H = ds._load_img_H(0)
     img_L = ds._load_img_L(0)
 
     # Predict the single random draw inside _make_sample without calling it.
     expected_mode = random.Random(42).randint(0, 7)
     random.seed(42)
-    out_H, out_L = ds._make_sample(img_H, img_L, 0)
+    out_H, out_L = ds._make_sample(img_H, img_L)
 
     exp_H = util.augment_img(img_H, expected_mode)
     exp_L = util.augment_img(img_L, expected_mode)
@@ -101,19 +101,19 @@ def test_plainpatch_make_sample_train_augment_exact(tmp_path, write_rgb_png):
 # ------------------------------------------------------------
 def test_plainpatch_getitem_train_returns_paired(tmp_path, write_rgb_png):
     roots = _make_roots(tmp_path, write_rgb_png)
-    ds = DatasetPlainPatch(_opt(roots, phase="train"))
+    ds = DatasetPlainPatch(**_opt(roots, phase="train"))
     sample = ds[0]
-    assert set(sample.keys()) >= {"L", "H"}
-    assert isinstance(sample["L"], torch.Tensor)
-    assert isinstance(sample["H"], torch.Tensor)
-    assert sample["L"].shape == (3, 64, 64)
-    assert sample["H"].shape == (3, 64, 64)
+    assert set(sample.keys()) >= {"img_L", "img_H"}
+    assert isinstance(sample["img_L"], torch.Tensor)
+    assert isinstance(sample["img_H"], torch.Tensor)
+    assert sample["img_L"].shape == (3, 64, 64)
+    assert sample["img_H"].shape == (3, 64, 64)
 
 
 def test_plainpatch_getitem_test_returns_full(tmp_path, write_rgb_png):
     roots = _make_roots(tmp_path, write_rgb_png, size=64)
-    ds = DatasetPlainPatch(_opt(roots, phase="test"))
+    ds = DatasetPlainPatch(**_opt(roots, phase="test"))
     sample = ds[0]
-    assert set(sample.keys()) >= {"L", "H"}
-    assert sample["L"].shape == (3, 64, 64)
-    assert sample["H"].shape == (3, 64, 64)
+    assert set(sample.keys()) >= {"img_L", "img_H"}
+    assert sample["img_L"].shape == (3, 64, 64)
+    assert sample["img_H"].shape == (3, 64, 64)

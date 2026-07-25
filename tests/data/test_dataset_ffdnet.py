@@ -32,10 +32,10 @@ def _opt(**kw):
 # ------------------------------------------------------------
 def test_ffdnet_make_sample_test_exact_noise_and_level():
     sigma_test = 30
-    ds = DatasetFFDNet(_opt(H_size=64, sigma=[0, 75], sigma_test=sigma_test))
+    ds = DatasetFFDNet(**_opt(H_size=64, sigma=[0, 75], sigma_test=sigma_test))
     img_H = _img_H(64, 64, seed=7)
 
-    img_H_out, img_L, noise_level = ds._make_sample(img_H, 0)
+    img_H_out, img_L, noise_level = ds._make_sample(img_H)
 
     # H is converted to single precision, no noise added.
     expected_H = util.uint2single(img_H)
@@ -55,10 +55,10 @@ def test_ffdnet_make_sample_test_exact_noise_and_level():
 
 def test_ffdnet_make_sample_train_is_patch_pair_with_level():
     patch = 48
-    ds = DatasetFFDNet(_opt(phase="train", H_size=patch, sigma=[0, 75], sigma_test=25))
+    ds = DatasetFFDNet(**_opt(phase="train", H_size=patch, sigma=[0, 75], sigma_test=25))
     img_H = _img_H(80, 80, seed=3)
 
-    img_H_out, img_L, noise_level = ds._make_sample(img_H, 0)
+    img_H_out, img_L, noise_level = ds._make_sample(img_H)
     assert img_H_out.shape == (patch, patch, 3)
     assert img_L.shape == (patch, patch, 3)
     assert img_H_out.dtype == np.float32
@@ -70,7 +70,7 @@ def test_ffdnet_make_sample_train_is_patch_pair_with_level():
 # __init__
 # ------------------------------------------------------------
 def test_ffdnet_init_required_values():
-    ds = DatasetFFDNet(_opt())
+    ds = DatasetFFDNet(**_opt())
     assert ds.patch_size == 64
     assert ds.sigma == [0, 75]
     assert ds.sigma_min == 0
@@ -83,11 +83,11 @@ def test_ffdnet_init_missing_required_raises():
     # sigma_test is required -- it cannot be derived from the [min,max] sigma
     # range, so a forgotten key must fail loud (no magic 25).
     with pytest.raises(AssertionError):
-        DatasetFFDNet({"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75]})
+        DatasetFFDNet(**{"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75]})
 
 
 def test_ffdnet_init_explicit():
-    ds = DatasetFFDNet(_opt(H_size=48, sigma=[10, 50], sigma_test=40))
+    ds = DatasetFFDNet(**_opt(H_size=48, sigma=[10, 50], sigma_test=40))
     assert ds.patch_size == 48
     assert ds.sigma == [10, 50]
     assert ds.sigma_min == 10
@@ -100,7 +100,7 @@ def test_ffdnet_init_explicit():
 # ------------------------------------------------------------
 def test_ffdnet_len(make_image_dir):
     d = make_image_dir(n=3)
-    ds = DatasetFFDNet(_opt(dataroot_H=str(d)))
+    ds = DatasetFFDNet(**_opt(dataroot_H=str(d)))
     assert len(ds) == 3
 
 
@@ -109,19 +109,18 @@ def test_ffdnet_len(make_image_dir):
 # ------------------------------------------------------------
 def test_ffdnet_getitem(make_image_dir):
     d = make_image_dir(n=1, h=64, w=64)
-    ds = DatasetFFDNet(_opt(dataroot_H=str(d), sigma_test=30))
+    ds = DatasetFFDNet(**_opt(dataroot_H=str(d), sigma_test=30))
     img_H = ds._load_img_H(0)
-    exp_H, exp_L, noise_level = ds._make_sample(img_H, 0)
+    exp_H, exp_L, noise_level = ds._make_sample(img_H)
     out = ds[0]
 
-    assert set(out.keys()) == {"L", "H", "C", "L_path", "H_path"}
-    assert out["H"].dtype == torch.float32
-    assert out["L"].dtype == torch.float32
-    assert out["L"].shape == torch.Size([3, 64, 64])
-    assert torch.equal(out["H"], util.single2tensor3(exp_H))
-    assert torch.equal(out["L"], util.single2tensor3(exp_L))
+    assert set(out.keys()) == {"img_L", "img_H", "C"}
+    assert out["img_H"].dtype == torch.float32
+    assert out["img_L"].dtype == torch.float32
+    assert out["img_L"].shape == torch.Size([3, 64, 64])
+    assert torch.equal(out["img_H"], util.single2tensor3(exp_H))
+    assert torch.equal(out["img_L"], util.single2tensor3(exp_L))
     # 'C' carries the per-sample noise level as a [1,1,1] tensor
     assert out["C"].shape == torch.Size([1, 1, 1])
     assert out["C"].dtype == torch.float32
     assert abs(float(out["C"]) - noise_level) < 1e-9
-    assert out["L_path"] == out["H_path"]

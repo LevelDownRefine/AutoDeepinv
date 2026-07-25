@@ -32,27 +32,39 @@ from data.base_dataset import BaseDataset
 
 class _Stub(BaseDataset):
     """Minimal BaseDataset subclass that implements the abstract _make_sample."""
-    def _make_sample(self, img_H, index):
+    def _make_sample(self, img_H):
         return img_H
+
+
+class _HyperStub(BaseDataset):
+    """Stub that also demands a subclass hyperparameter (exercises the
+    ``self._kwargs.pop(...)`` half of the kwargs path)."""
+    def _make_sample(self, img_H):
+        return img_H
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sigma = self._pop_kwargs(self._kwargs, "sigma")
+        assert not self._kwargs, "unknown keys: %s" % sorted(self._kwargs)
+        del self._kwargs
 
 
 def test_base_make_sample_is_abstract():
     # BaseDataset does not implement _make_sample; call it on a bare instance.
-    ds = BaseDataset({"phase": "test", "n_channels": 3, "paths_H": ["x.png"]})
+    ds = BaseDataset(**{"phase": "test", "n_channels": 3, "paths_H": ["x.png"]})
     with pytest.raises(NotImplementedError):
-        ds._make_sample(np.zeros((4, 4, 3), np.uint8), 0)
+        ds._make_sample(np.zeros((4, 4, 3), np.uint8))
 
 
 def test_base_requires_n_channels():
     # Project rule: parameters are passed explicitly; no silent default.
     with pytest.raises(AssertionError):
-        _Stub({"phase": "test", "paths_H": ["x.png"]})
+        _Stub(**{"phase": "test", "paths_H": ["x.png"]})
 
 
 def test_base_paths_H_optional_but_len_fails_loud():
     # Synthesis/test mode: no paths_H/dataroot_H is allowed -- datasets that
     # build samples from a provided image never touch disk.
-    ds = _Stub({"phase": "test", "n_channels": 3})
+    ds = _Stub(**{"phase": "test", "n_channels": 3})
     assert ds.paths_H is None
     # But asking for the size of a paths-less dataset must fail loud -- never
     # silently report 0 and let a training run proceed on an empty dataset.
@@ -62,29 +74,53 @@ def test_base_paths_H_optional_but_len_fails_loud():
 
 def test_base_stores_opt_and_paths(make_image_dir):
     d = make_image_dir(n=2)
-    ds = _Stub({"phase": "test", "n_channels": 3, "dataroot_H": str(d)})
-    assert ds.opt["n_channels"] == 3
+    ds = _Stub(**{"phase": "test", "n_channels": 3, "dataroot_H": str(d)})
+    assert ds.n_channels == 3
     assert isinstance(ds.paths_H, list) and len(ds.paths_H) == 2
     assert ds.paths_L is None  # no dataroot_L was given
 
 
 def test_base_n_channels_override():
-    ds = _Stub({"phase": "test", "n_channels": 1, "paths_H": ["x.png"]})
+    ds = _Stub(**{"phase": "test", "n_channels": 1, "paths_H": ["x.png"]})
     assert ds.n_channels == 1
+
+
+def test_kwargs_unpack_does_not_mutate_caller_dict():
+    # Passing a dict ``d`` as ``**d`` gives the callee a *fresh* local mapping.
+    # Every internal ``kwargs.pop(...)`` / ``self._kwargs.pop(...)`` (including the
+    # subclass hyperparameter dem/pop) mutates that copy, never the caller's
+    # original ``d``. This contract lets callers safely reuse one config dict
+    # across many constructions. We assert it at both the base level and the
+    # hyperparameter-pop level.
+    d = {"phase": "test", "n_channels": 3, "paths_H": ["x.png"], "extra": 1}
+    snapshot = dict(d)  # shallow copy taken *before* construction
+    ds = _Stub(**d)
+    # Original dict is unchanged (prove the pops happened on the copy).
+    assert d == snapshot
+    assert {"phase", "n_channels", "paths_H", "extra"} <= set(d)
+    # And the constructor really did consume the keys internally.
+    assert ds.n_channels == 3 and ds.phase == "test"
+
+    # Hyperparameter-pop level: _HyperStub pops 'sigma' via _pop_kwargs.
+    d2 = {"phase": "test", "n_channels": 3, "sigma": 25}
+    snapshot2 = dict(d2)
+    ds2 = _HyperStub(**d2)
+    assert d2 == snapshot2  # 'sigma' was popped from the copy, not from d2
+    assert ds2.sigma == 25
 
 
 def test_base_len(make_image_dir):
     d = make_image_dir(n=5)
-    ds = _Stub({"phase": "test", "n_channels": 3, "dataroot_H": str(d)})
+    ds = _Stub(**{"phase": "test", "n_channels": 3, "dataroot_H": str(d)})
     assert len(ds) == 5
     # empty list -> 0
-    ds2 = _Stub({"phase": "test", "n_channels": 3, "paths_H": []})
+    ds2 = _Stub(**{"phase": "test", "n_channels": 3, "paths_H": []})
     assert len(ds2) == 0
 
 
 def test_base_load_img_H_roundtrip(make_image_dir):
     d = make_image_dir(n=1, h=40, w=50)
-    ds = _Stub({"phase": "test", "n_channels": 3, "dataroot_H": str(d)})
+    ds = _Stub(**{"phase": "test", "n_channels": 3, "dataroot_H": str(d)})
     img = ds._load_img_H(0)
     assert img.dtype == np.uint8
     assert img.shape == (40, 50, 3)
@@ -96,7 +132,7 @@ def test_base_load_img_H_known_array(tmp_path):
     arr = np.zeros((20, 30, 3), np.uint8)
     arr[5, 5] = [10, 20, 30]
     cv2.imwrite(str(tmp_path / "k.png"), cv2.cvtColor(arr, cv2.COLOR_RGB2BGR))
-    ds = _Stub({"phase": "test", "n_channels": 3, "paths_H": [str(tmp_path / "k.png")]})
+    ds = _Stub(**{"phase": "test", "n_channels": 3, "paths_H": [str(tmp_path / "k.png")]})
     assert np.array_equal(ds._load_img_H(0), arr)
 
 
@@ -104,7 +140,7 @@ def test_base_load_img_L(tmp_path, write_rgb_png):
     d = tmp_path / "l"
     d.mkdir()
     write_rgb_png(d / "l0.png", h=32, w=32, seed=0)
-    ds = _Stub({"phase": "test", "n_channels": 3,
+    ds = _Stub(**{"phase": "test", "n_channels": 3,
                 "paths_H": ["x.png"], "paths_L": [str(d / "l0.png")]})
     img = ds._load_img_L(0)
     assert img.dtype == np.uint8
