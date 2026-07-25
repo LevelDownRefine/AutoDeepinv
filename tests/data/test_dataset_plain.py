@@ -59,6 +59,20 @@ def test_plain_init_paired_length_mismatch_raises(make_image_dir):
         DatasetPlain(**_opt(str(h), str(l)))
 
 
+def test_plain_requires_paths_L_at_construction(make_image_dir):
+    import pytest
+    # Plain is a paired dataset (_requires_L = True). A missing/empty paths_L
+    # must fail loud AT CONSTRUCTION (inside _resolve_image_paths with
+    # required=True) -- the "catch it on the spot" contract -- not a delayed
+    # failure inside __getitem__.
+    h = make_image_dir(n=1, name="h")
+    l = make_image_dir(n=1, name="l")
+    opt = _opt(str(h), str(l))
+    opt["paths_L"] = []  # empty -> required must reject
+    with pytest.raises(AssertionError):
+        DatasetPlain(**opt)
+
+
 # ------------------------------------------------------------
 # __len__
 # ------------------------------------------------------------

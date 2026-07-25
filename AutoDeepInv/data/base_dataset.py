@@ -28,16 +28,17 @@ class BaseDataset(data.Dataset):
 
     Engineering discipline (this project):
       * ``n_channels`` is REQUIRED in ``kwargs`` -- no silent default.
-      * ``paths_H`` is OPTIONAL. It must come from ``kwargs['paths_H']`` or
-        ``util.get_image_paths(kwargs['dataroot_H'])``; if neither is given it is
-        ``None``. This is intentional: synthesis/test-mode datasets
-        (``DatasetDnCNN``/``FDnCNN``/``FFDNet``) build samples from a provided
-        image via ``_make_sample`` and never touch disk, so they construct
-        without paths. The guard is in ``__len__``: asking for the length of a
-        paths-less dataset fails loud -- you never silently train on 0 images.
-        Disk-backed subclasses (``DatasetDnPatch``/``Plain``/``PlainPatch``)
-        additionally assert ``paths_H`` is present in their own ``__init__``.
-      * ``paths_L`` is optional (``paths_L`` or ``dataroot_L``; else ``None``).
+      * ``paths_H`` / ``paths_L`` are resolved from ``kwargs['paths_H']`` /
+        ``dataroot_H`` (and likewise for L). Whether a side is *required* is a
+        per-subclass declaration (``_requires_H`` / ``_requires_L`` class
+        attributes), NOT a separate post-hoc ``assert``. The base leaves both
+        False so abstract/stub/synthesis datasets construct without on-disk
+        images; a subclass that loads H via ``_load_img_H`` sets
+        ``_requires_H = True`` so a missing/empty ``paths_H`` fails loud *at
+        construction* (inside ``_resolve_image_paths`` with ``required=True``)
+        -- never later in ``__getitem__`` / ``__len__``. Disk-backed datasets
+        (``DatasetDnPatch``/``Plain``/``PlainPatch``) require H; ``Plain`` /
+        ``PlainPatch`` additionally require L (paired image-to-image mapping).
       * Invariants (positive ``n_channels``, ``paths_H`` is a list when given)
         are asserted at construction so misconfiguration fails loud, not at
         sample time 1000 images later.
@@ -58,6 +59,17 @@ class BaseDataset(data.Dataset):
         source of these values.
     """
 
+    # Path requirements are declared per subclass, NOT checked by a separate
+    # post-hoc assert. A subclass that loads H (resp. L) from disk via
+    # ``_load_img_H`` (resp. ``_load_img_L``) sets the matching flag to True; the
+    # base then enforces presence *at resolution time* (``_resolve_image_paths``
+    # with ``required=True``), so a missing/empty path fails loud during
+    # construction -- not later in ``__getitem__`` / ``__len__``. The base leaves
+    # both False so abstract/stub datasets stay constructible without on-disk
+    # images (synthesis mode).
+    _requires_H = False
+    _requires_L = False
+
     def __init__(self, **kwargs):
         super().__init__()
 
@@ -77,15 +89,17 @@ class BaseDataset(data.Dataset):
             "phase must be one of train/test/val, got %r" % (phase,)
         self.phase = phase
 
-        # --- paths_H is optional at the base level; a subclass that uses it
-        #     (via _load_img_H) must assert it in its own __init__ ---
-        self.paths_H = self._resolve_image_paths(kwargs, "paths_H", "dataroot_H")
+        # --- paths_H: required only if the subclass declares _requires_H
+        #     (it loads H via _load_img_H). Enforced at resolution time below,
+        #     so a missing/empty path fails loud here, not in __getitem__. ---
+        self.paths_H = self._resolve_image_paths(
+            kwargs, "paths_H", "dataroot_H", required=self._requires_H)
         assert self.paths_H is None or isinstance(self.paths_H, list), \
             "'paths_H' must resolve to a list or None, got %r" % (type(self.paths_H),)
 
-        # --- paths_L is optional at the base level; a subclass that uses it
-        #     (via _load_img_L) must assert it in its own __init__ ---
-        self.paths_L = self._resolve_image_paths(kwargs, "paths_L", "dataroot_L")
+        # --- paths_L: required only if the subclass declares _requires_L ---
+        self.paths_L = self._resolve_image_paths(
+            kwargs, "paths_L", "dataroot_L", required=self._requires_L)
 
         # The remaining kwargs are the subclass's hyperparameters, exposed as
         # ``self._kwargs`` for the subclass to consume. The subclass pops each
@@ -94,28 +108,40 @@ class BaseDataset(data.Dataset):
         # linger and be misread later.
         self._kwargs = kwargs
 
-    def _resolve_image_paths(self, kwargs, paths_key, root_key):
-        """Return the image path list for one side (H or L), or ``None`` if neither key is given.
+    def _resolve_image_paths(self, kwargs, paths_key, root_key, required):
+        """Resolve the image path list for one side (H or L), enforcing presence when ``required``.
 
         Resolution rule (strict, no silent fallback):
           * if ``kwargs[paths_key]`` is present, use it directly (even if empty)
             and consume that key;
           * elif ``kwargs[root_key]`` is present, scan that directory and consume
             that key;
-          * else: return ``None``. The path is optional at the base level; a
-            subclass that needs it asserts ``self.paths_H`` / ``self.paths_L`` in
-            its own ``__init__`` (e.g. by calling ``_load_img_H`` / ``_load_img_L``,
-            which already require the path to exist).
+          * else: ``paths`` is ``None``.
+
+        When ``required`` is true the path MUST be provided and non-empty -- the
+        check happens HERE, at resolution time (construction), so a missing or
+        empty path fails loud immediately instead of later inside
+        ``__getitem__`` / ``__len__``. Subclasses declare their needs via the
+        ``_requires_H`` / ``_requires_L`` class attributes; the base leaves both
+        False so abstract/stub datasets stay constructible without on-disk
+        images (synthesis mode).
         The consumed key is popped from ``kwargs`` so it does not survive as a
         "leftover unknown key" when the subclass later asserts ``not kwargs``.
         """
         has_paths = paths_key in kwargs
         has_root = root_key in kwargs
         if has_paths:
-            return kwargs.pop(paths_key)
-        if has_root:
-            return util.get_image_paths(kwargs.pop(root_key))
-        return None
+            paths = kwargs.pop(paths_key)
+        elif has_root:
+            paths = util.get_image_paths(kwargs.pop(root_key))
+        else:
+            paths = None
+        if required and not paths:
+            raise AssertionError(
+                "%s requires '%s' (or '%s') to be present and non-empty; got %r"
+                % (type(self).__name__, paths_key, root_key, paths)
+            )
+        return paths
 
     def _pop_kwargs(self, kwargs, key):
         """Require ``key`` in ``kwargs`` and return it -- fail loud, never default.

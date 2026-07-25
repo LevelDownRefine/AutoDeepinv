@@ -6,6 +6,8 @@ from data.base_dataset import BaseDataset
 
 class DatasetPlainPatch(BaseDataset):
     """Image-to-image mapping dataset that pre-extracts L/H patch pairs into buffers; both paths_L and paths_H required."""
+    _requires_H = True  # paired mapping: loads H via _load_img_H
+    _requires_L = True  # paired mapping: loads L via _load_img_L
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -19,11 +21,11 @@ class DatasetPlainPatch(BaseDataset):
         assert not self._kwargs, "unknown DatasetPlainPatch keys: %s" % sorted(self._kwargs)
         del self._kwargs
 
-        # Disk-backed dataset: both paths mandatory and must be paired.
-        assert self.paths_H, 'Error: H path is empty.'
-        assert self.paths_L, 'Error: L path is empty. This dataset uses L path, you can use dataset_dnpatch'
-        if self.paths_L and self.paths_H:
-            assert len(self.paths_L) == len(self.paths_H), 'H and L datasets have different number of images - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
+        # Both paths mandatory and must be paired. The "mandatory" part is
+        # enforced at resolution time via _requires_H/_requires_L = True, so a
+        # missing/empty path already failed loud in __init__ (super().__init__);
+        # here we only check the pairing invariant.
+        assert len(self.paths_L) == len(self.paths_H), 'H and L datasets have different number of images - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
 
         # ------------------------------------
         # number of sampled images

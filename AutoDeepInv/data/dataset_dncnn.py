@@ -6,6 +6,7 @@ from data.base_dataset import BaseDataset
 
 class DatasetDnCNN(BaseDataset):
     """Denoising dataset for fixed-sigma AWGN (e.g. DnCNN): L = H + AWGN(sigma/255)."""
+    _requires_H = True  # loads H from disk via _load_img_H
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -27,9 +27,18 @@ def _single(h=64, w=64, seed=0):
 
 
 def _opt(**kw):
-    """Default opt dict for DatasetDnCNN; sigma/sigma_test required (no .get())."""
+    """Default opt dict for DatasetDnCNN; sigma/sigma_test required (no .get()).
+
+    A placeholder ``paths_H`` is added (only when no path source is given) so
+    ``_make_sample`` unit tests can construct without a real on-disk image set;
+    the base enforces presence at resolution time, so a genuine missing path
+    fails loud at construction. Tests that exercise ``__getitem__``/``__len__``
+    pass a real ``dataroot_H`` instead, which must take precedence.
+    """
     opt = {"phase": "test", "n_channels": 3, "H_size": 64, "sigma": 25, "sigma_test": 25}
     opt.update(kw)
+    if "paths_H" not in opt and "dataroot_H" not in opt:
+        opt["paths_H"] = ["x.png"]
     return opt
 
 
@@ -127,6 +136,20 @@ def test_dncnn_init_unknown_key_raises():
     # loud (no silent unknown key), not be silently ignored.
     with pytest.raises(AssertionError):
         DatasetDnCNN(**_opt(), bogus_hp=5)
+
+
+def test_dncnn_requires_paths_H_at_construction():
+    import pytest
+    # DnCNN loads H from disk via _load_img_H, so _requires_H = True. A missing
+    # or empty paths_H must fail loud AT CONSTRUCTION (inside _resolve_image_paths
+    # with required=True) -- this is the "catch it on the spot" contract, not a
+    # separate post-hoc assert and not a delayed failure in __getitem__/__len__.
+    opt = _opt()
+    del opt["paths_H"]
+    with pytest.raises(AssertionError):
+        DatasetDnCNN(**opt)
+    with pytest.raises(AssertionError):
+        DatasetDnCNN(**_opt(paths_H=[]))
 
 
 def test_dncnn_init_explicit():

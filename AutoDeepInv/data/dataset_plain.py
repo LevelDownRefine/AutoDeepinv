@@ -5,6 +5,8 @@ from data.base_dataset import BaseDataset
 
 class DatasetPlain(BaseDataset):
     """Image-to-image mapping dataset: loads both L and H (paths_L and paths_H required)."""
+    _requires_H = True  # paired mapping: loads H via _load_img_H
+    _requires_L = True  # paired mapping: loads L via _load_img_L
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -15,11 +17,11 @@ class DatasetPlain(BaseDataset):
         assert not self._kwargs, "unknown DatasetPlain keys: %s" % sorted(self._kwargs)
         del self._kwargs
 
-        # Disk-backed dataset: both paths are mandatory and must be paired.
-        assert self.paths_H, 'Error: H path is empty.'
-        assert self.paths_L, 'Error: L path is empty. Plain dataset assumes both L and H are given!'
-        if self.paths_L and self.paths_H:
-            assert len(self.paths_L) == len(self.paths_H), 'L/H mismatch - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
+        # Both paths are mandatory and must be paired. The "mandatory" part is
+        # enforced at resolution time via _requires_H/_requires_L = True, so a
+        # missing/empty path already failed loud in __init__ (super().__init__);
+        # here we only check the pairing invariant.
+        assert len(self.paths_L) == len(self.paths_H), 'L/H mismatch - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
 
     def _make_sample(self, img_H, img_L):
         """Build (H, L): test returns the full paired images; train crops+augments a paired patch."""

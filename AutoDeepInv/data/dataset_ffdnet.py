@@ -12,6 +12,7 @@ class DatasetFFDNet(BaseDataset):
     sigma_test (test, seeded for reproducibility); the network is fed sigma as a
     conditioning input rather than via a concatenated noise-level map.
     """
+    _requires_H = True  # loads H from disk via _load_img_H
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

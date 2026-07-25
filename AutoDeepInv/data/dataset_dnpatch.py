@@ -13,6 +13,7 @@ class DatasetDnPatch(BaseDataset):
     (PyTorch RNG) AWGN; in test mode the input image is degraded with seeded
     ``sigma_test/255`` numpy AWGN (deterministic, testable).
     """
+    _requires_H = True  # disk-backed: loads H from disk via _load_img_H
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -28,8 +29,9 @@ class DatasetDnPatch(BaseDataset):
         del self._kwargs
 
         # Disk-backed dataset: paths_H is mandatory (synthesis mode is not valid
-        # here, since patches are pre-extracted from disk in update_data()).
-        assert self.paths_H, 'Error: H path is empty.'
+        # here, since patches are pre-extracted from disk in update_data()). The
+        # requirement is enforced at resolution time via _requires_H = True, so a
+        # missing/empty paths_H already failed loud in __init__ (super().__init__).
 
         self.num_sampled = min(self.num_sampled, len(self.paths_H))
 

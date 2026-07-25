@@ -11,6 +11,7 @@ class DatasetFDnCNN(BaseDataset):
     sigma_test (test, seeded for reproducibility); M is a constant map carrying
     the noise level so the network can condition on it.
     """
+    _requires_H = True  # loads H from disk via _load_img_H
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

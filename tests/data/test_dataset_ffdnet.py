@@ -21,9 +21,19 @@ def _img_H(h=64, w=64, seed=0):
 
 
 def _opt(**kw):
-    """Default opt dict for DatasetFFDNet; H_size/sigma/sigma_test required (no .get())."""
-    opt = {"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75], "sigma_test": 25}
+    """Default opt dict for DatasetFFDNet; H_size/sigma/sigma_test required (no .get()).
+
+    A placeholder ``paths_H`` is added (only when no path source is given) so
+    ``_make_sample`` unit tests can construct without a real on-disk image set;
+    the base enforces presence at resolution time. Tests that exercise
+    ``__getitem__``/``__len__`` pass a real ``dataroot_H`` instead, which must
+    take precedence.
+    """
+    opt = {"phase": "test", "n_channels": 3, "H_size": 64, "sigma": [0, 75],
+           "sigma_test": 25}
     opt.update(kw)
+    if "paths_H" not in opt and "dataroot_H" not in opt:
+        opt["paths_H"] = ["x.png"]
     return opt
 
 
