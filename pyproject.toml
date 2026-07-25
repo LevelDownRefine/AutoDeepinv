@@ -6,16 +6,16 @@ requires-python = ">=3.10"
 dependencies = [
     # --- torch family: pulled from the CUDA 12.8 (cu128) index below (mirrors KAIR) ---
     # cu128 builds include Blackwell (sm_120) support for RTX 5070 Ti and only
-    # need NVIDIA driver R570+ (572.x). Matches KAIR's environment so the deepinv
-    # shim runs on the same toolchain and the same torch build that produced the
-    # reference benchmark numbers.
+    # need NVIDIA driver R570+ (572.x). Matches KAIR's environment so deepinv
+    # (now a declared PyPI dependency, see below) runs on the same toolchain and
+    # the same torch build that produced the reference benchmark numbers.
     "torch==2.11.0",
     "torchvision==0.26.0",
-
     # --- rest from PyPI ---
     "opencv-python-headless",   # headless build: works in CI / no display
     "numpy",
     "matplotlib",                # imported at top of utils/utils_image.py
+    "deepinv==0.4.1",
 ]
 
 [dependency-groups]
